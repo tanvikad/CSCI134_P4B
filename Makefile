@@ -1,4 +1,7 @@
-all: test_button
+all: test_button lab4b
+
+lab4b: lab4b.c
+	gcc -Wall -Wextra -g  lab4b.c -o lab4b -lrobotcontrol -lm
 
 test_button: test_buttons.c
 	gcc -Wall -Wextra -g  test_buttons.c -o test_buttons -lrobotcontrol -lm

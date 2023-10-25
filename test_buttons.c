@@ -16,13 +16,14 @@
 
 int main()
 { 
-    if(rc_adc_init()){
+    if(rc_adc_init() == -1){
             fprintf(stderr,"ERROR: failed to run rc_init_adc()\n");
             return -1;
     }
 
     int output_init = rc_gpio_init (1, 18, GPIOHANDLE_REQUEST_INPUT);
     printf("The output of init is %d \n", output_init);
+
 
     while(1) {
         int16_t adc_read= rc_adc_read_raw(0);
