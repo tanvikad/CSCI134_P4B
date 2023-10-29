@@ -114,14 +114,10 @@ int main(int argc, char *argv[]) {
                 char buffer[1000]; 
                 int how_much_read = read(poll_fds[input_fd].fd, buffer, 1000);
                 if (input_fd == 0) {
-			//int how_much_read = read(0, buffer, 1000);
-			//printf(" %s\n", buffer);
-			write(1, buffer, how_much_read);
-		}else  {
-
-			//write(1, buffer, how_much_read);
-			printf("The button is pressed \n");
-		}
+			    write(1, buffer, how_much_read);
+            }else  {
+                printf("The button is pressed \n");
+            }
             }
 
             if (poll_fds[input_fd].revents & POLLERR || poll_fds[input_fd].revents & POLLHUP) {
