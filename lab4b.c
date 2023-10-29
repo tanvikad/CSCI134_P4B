@@ -21,6 +21,21 @@
 #include <rc/time.h>
 #include <rc/gpio.h>
 #include <rc/adc.h>
+#include <time.h>
+
+
+int period_interval = 1;
+int use_farenheight = 1;
+int should_stop = 0; 
+int should_start = 1;
+//print tempature to 1 
+int log_fd = -1;
+
+void* thread_temperature() {
+
+
+    return NULL;
+}
 
 int main(int argc, char *argv[]) {
 
@@ -35,10 +50,7 @@ int main(int argc, char *argv[]) {
         { 0, 0, 0, 0}
     };
 
-    int use_farenheight = 1;
-    int period_interval = 1;
-    int should_stop = 0; 
-    int should_start = 1;
+
     char* log_name = NULL;
     while((curr_option = getopt_long(argc, argv, "c:p:s:t:l:o", options, NULL)) != -1)  {
         switch(curr_option) {
@@ -74,6 +86,13 @@ int main(int argc, char *argv[]) {
     }
     printf("The button_fd is %d \n", button_fd);
 
+    time_t rawtime;
+    struct tm *info;
+    time( &rawtime );
+    info = localtime( &rawtime );
+    printf("Current local time and date: %s", asctime(info));
+    printf("Current minutes is %d:%d:%d \n", info->tm_hour, info->tm_min, info->tm_sec);
+
 
     int nfds = 2;
     struct pollfd poll_fds[nfds];
@@ -91,12 +110,14 @@ int main(int argc, char *argv[]) {
             exit(1); 
         }
         for (int input_fd = 0; input_fd < nfds; input_fd++) {
-            printf("The polling is %d \n", input_fd);
             if (poll_fds[input_fd].revents & POLLIN) {
                 char buffer[1000]; 
                 int how_much_read = read(poll_fds[input_fd].fd, buffer, 1000);
-                printf("The buffer is %s \n", buffer);
-
+                if (input_fd == 0) {
+			printf("The buffer is %s \n", buffer);
+		}else  {
+			printf("The button is pressed \n");
+		}
             }
 
             if (poll_fds[input_fd].revents & POLLERR || poll_fds[input_fd].revents & POLLHUP) {
