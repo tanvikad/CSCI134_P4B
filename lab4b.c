@@ -22,6 +22,8 @@
 #include <rc/gpio.h>
 #include <rc/adc.h>
 #include <time.h>
+#include<unistd.h>
+
 
 
 int period_interval = 1;
@@ -29,12 +31,59 @@ int use_farenheight = 1;
 int should_stop = 0; 
 int should_start = 1;
 //print tempature to 1 
-int log_fd = -1;
+FILE* log_file = NULL; 
+int button_fd;
 
-void* thread_temperature() {
+
+float get_temperatureF() {
+    int16_t adc_read= rc_adc_read_raw(0);
+
+    int R0 = 100000;
+    float R = 4095.0/adc_read-1.0;
+
+    int B = 4275;   
+    R = R0 * R;
+    float temperature=1.0/(log(R/R0)/B+1/298.15)-273.15;
+    return temperature;
+}
 
 
-    return NULL;
+void initalize_hardware() {
+
+    button_fd =  rc_gpio_init_event(1, 18, 0, GPIOEVENT_REQUEST_RISING_EDGE);
+    if(button_fd  == -1) {
+        fprintf(stderr, "Failed init event \n");
+        exit(1);
+    }
+
+    if(rc_adc_init() == -1){
+        fprintf(stderr,"ERROR: failed to run rc_init_adc()\n");
+        exit(1);
+    }
+
+    int output_init = rc_gpio_init (1, 18, GPIOHANDLE_REQUEST_INPUT);
+
+    //TODO check output_init 
+}
+void* thread_temperature_action() {
+
+    while(1) {
+        sleep(period_interval);
+        float temperature = get_temperatureF();
+
+        time_t rawtime;
+        struct tm *info;
+        time( &rawtime );
+        info = localtime( &rawtime );
+        char buffer[50];
+        sprintf(buffer, "%d:%d:%d %0.1f\n", info->tm_hour, info->tm_min, info->tm_sec, temperature);
+        fprintf(stdout, buffer);
+        if(log_file != NULL) {
+            fprintf(log_file, buffer);
+        }
+    }
+    
+
 }
 
 int main(int argc, char *argv[]) {
@@ -69,30 +118,31 @@ int main(int argc, char *argv[]) {
                 break;
             case 'l':
                 log_name = optarg;
+                break;
             default:
                 fprintf(stderr, "Use the options --iterations --threads");
                 exit(1);
                 break;
         }
     }
-
-    // int output_init = rc_gpio_init (1, 18, GPIOHANDLE_REQUEST_INPUT);
-    // printf("The output of init is %d \n", output_init);
-
-
-    int button_fd =  rc_gpio_init_event(1, 18, 0, GPIOEVENT_REQUEST_RISING_EDGE);
-    if(button_fd  == -1) {
-        fprintf(stderr, "Failed init event \n");
+    if(log_name != NULL) {
+        // log_fd = open(log_name, O_CREAT | O_WRONLY | O_APPEND, S_IRWXU);
+        log_file = fopen(log_name, "w");
+        if(log_file == NULL) {
+            fprintf(stderr, "Opening the log file failed %s \n", strerror(errno));
+            exit(1);
+        }
     }
-    printf("The button_fd is %d \n", button_fd);
+    
 
-    time_t rawtime;
-    struct tm *info;
-    time( &rawtime );
-    info = localtime( &rawtime );
-    printf("Current local time and date: %s", asctime(info));
-    printf("Current minutes is %d:%d:%d \n", info->tm_hour, info->tm_min, info->tm_sec);
+    initalize_hardware();
 
+    pthread_t temp_thread;
+    int rc = pthread_create(&temp_thread, NULL, thread_temperature_action, NULL);
+    if(rc != 0) {
+        fprintf(stderr, "Failed to initialize the pthread \n");
+        exit(1);
+    }
 
     int nfds = 2;
     struct pollfd poll_fds[nfds];
