@@ -29,13 +29,12 @@
 int period_interval = 1;
 int use_farenheight = 1;
 int should_stop = 0; 
-int should_start = 1;
-//print tempature to 1 
 int log_fd = -1; 
 int button_fd;
+int exit_flag = 0;
 
 
-float get_temperatureF() {
+float get_temperatureC() {
     int16_t adc_read= rc_adc_read_raw(0);
 
     int R0 = 100000;
@@ -48,49 +47,133 @@ float get_temperatureF() {
 }
 
 
+float get_temperatureF() {
+    float celcius = get_temperatureC();
+    return ((celcius * (9.0/5.0)) + 32);
+}
 void initalize_hardware() {
 
     button_fd =  rc_gpio_init_event(1, 18, 0, GPIOEVENT_REQUEST_RISING_EDGE);
     if(button_fd  == -1) {
         fprintf(stderr, "Failed init event \n");
-        exit(1);
+        exit(2);
     }
 
     if(rc_adc_init() == -1){
         fprintf(stderr,"ERROR: failed to run rc_init_adc()\n");
-        exit(1);
+        exit(2);
     }
 
     int output_init = rc_gpio_init (1, 18, GPIOHANDLE_REQUEST_INPUT);
-
-    //TODO check output_init 
+    if(output_init != 0) {
+        fprintf(stderr, "ERROR: failed to initialized GPIOHANDLE \n");
+        exit(2);
+    }
 }
+
 void* thread_temperature_action() {
 
     while(1) {
-        sleep(period_interval);
         float temperature = get_temperatureF();
-
+        if(use_farenheight == 0) temperature = get_temperatureC();
         time_t rawtime;
         struct tm *info;
         time( &rawtime );
         info = localtime( &rawtime );
         char buffer[50];
         sprintf(buffer, "%d:%d:%d %0.1f\n", info->tm_hour, info->tm_min, info->tm_sec, temperature);
-        fprintf(stdout, buffer);
-        if(log_fd != -1) {
+        if(should_stop ==0) fprintf(stdout, buffer);
+        if(log_fd != -1 && should_stop==0) {
             write(log_fd, buffer, strlen(buffer));
-
         }
+        sleep(period_interval);
+        if(exit_flag == 1) {
+            pthread_exit(0);
+        }
+
+
     }
     
 
 }
 
 void process_command(char* buffer, int length) {
-    printf("The command we got is \n");
-    write(1, buffer, length);
-    printf("\n");
+    char off[] = "OFF";
+    char log[] = "LOG";
+    char start[] = "START";
+    char celcius[] = "SCALE=C";
+    char faren[] = "SCALE=F";
+    char period[] = "PERIOD=";
+    char stop[] = "STOP";
+
+    if(length <= 2) return;
+
+    if((size_t)(length) > strlen(period) && strncmp(buffer,period,strlen(period)) == 0) {
+        period_interval = atoi(buffer+strlen(period));
+        if(log_fd != -1) {
+            write(log_fd, buffer, length);
+            write(log_fd, "\n", 1);
+        }
+    }
+
+    if(length >= 3 && strncmp(buffer, log, 3) == 0) {
+        if(log_fd != -1) {
+            write(log_fd, buffer, length);
+            write(log_fd, "\n", 1);
+        }
+    }
+
+    if(length == 4 && strncmp(buffer, stop, 4) == 0) {
+        if(log_fd != -1) {
+            write(log_fd, buffer, length);
+            write(log_fd, "\n", 1);
+        }
+        should_stop = 1;
+    }
+
+    if(length == 7 && strncmp(buffer, celcius, 7) == 0) {
+        if(log_fd != -1) {
+            write(log_fd, buffer, length);
+            write(log_fd, "\n", 1);
+        }
+        use_farenheight = 0;
+    }
+
+    if(length == 7 && strncmp(buffer, faren, 7) == 0) {
+        if(log_fd != -1) {
+            write(log_fd, buffer, length);
+            write(log_fd, "\n", 1);
+        }
+        use_farenheight = 1;
+    }
+
+    if(length == 5 && strncmp(buffer, start, 5) == 0) {
+        if(log_fd != -1) {
+            write(log_fd, buffer, length);
+            write(log_fd, "\n", 1);
+        }
+        should_stop = 0;
+    }
+
+    
+    if(length==3 && strncmp(buffer, off, 3) == 0) {
+        write(log_fd, buffer, length);
+        write(log_fd, "\n", 1);
+
+        time_t rawtime;
+        struct tm *info;
+        time( &rawtime );
+        info = localtime( &rawtime );
+        char shutdown_buffer[50];
+        sprintf(shutdown_buffer, "%d:%d:%d SHUTDOWN\n", info->tm_hour, info->tm_min, info->tm_sec);
+        fprintf(stdout, shutdown_buffer);
+        if(log_fd != -1) {
+            write(log_fd, shutdown_buffer, strlen(shutdown_buffer));
+        }
+        exit_flag = 1; 
+    }
+
+    
     return;
 }
 
@@ -173,12 +256,15 @@ int main(int argc, char *argv[]) {
                 char read_buffer[1000]; 
                 int how_much_read = read(poll_fds[input_fd].fd, read_buffer, 1000);
                 if (input_fd == 0) {
-                    write(1, read_buffer, how_much_read);
-                    if(log_fd != -1) write(log_fd, read_buffer, how_much_read);
+                    // write(1, read_buffer, how_much_read);
                     int pointer_in_read = 0;
                     while(pointer_in_read < how_much_read) {
                         if(read_buffer[pointer_in_read] == '\n') {
+                            incomplete_buffer[pointer_in_buffer] = '\0';
                             process_command(incomplete_buffer, pointer_in_buffer);
+                            if(exit_flag == 1) {
+                                exit(0);
+                            }
                             pointer_in_buffer = 0;
                             pointer_in_read ++;
                         } else {
@@ -188,7 +274,18 @@ int main(int argc, char *argv[]) {
                         }
                     }
                 }else  {
-                    printf("The button is pressed \n");
+                    time_t rawtime;
+                    struct tm *info;
+                    time( &rawtime );
+                    info = localtime( &rawtime );
+                    char shutdown_buffer[50];
+                    sprintf(shutdown_buffer, "%d:%d:%d SHUTDOWN\n", info->tm_hour, info->tm_min, info->tm_sec);
+                    fprintf(stdout, shutdown_buffer);
+                    if(log_fd != -1) {
+                        write(log_fd, shutdown_buffer, strlen(shutdown_buffer));
+                    }
+                    exit_flag = 1;
+                    exit(0);
                 }
             }
 
