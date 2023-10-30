@@ -31,7 +31,7 @@ int use_farenheight = 1;
 int should_stop = 0; 
 int should_start = 1;
 //print tempature to 1 
-FILE* log_file = NULL; 
+int log_fd = -1; 
 int button_fd;
 
 
@@ -78,12 +78,20 @@ void* thread_temperature_action() {
         char buffer[50];
         sprintf(buffer, "%d:%d:%d %0.1f\n", info->tm_hour, info->tm_min, info->tm_sec, temperature);
         fprintf(stdout, buffer);
-        if(log_file != NULL) {
-            fprintf(log_file, buffer);
+        if(log_fd != -1) {
+            write(log_fd, buffer, strlen(buffer));
+
         }
     }
     
 
+}
+
+void process_command(char* buffer, int length) {
+    printf("The command we got is \n");
+    write(1, buffer, length);
+    printf("\n");
+    return;
 }
 
 int main(int argc, char *argv[]) {
@@ -126,9 +134,9 @@ int main(int argc, char *argv[]) {
         }
     }
     if(log_name != NULL) {
-        // log_fd = open(log_name, O_CREAT | O_WRONLY | O_APPEND, S_IRWXU);
-        log_file = fopen(log_name, "w");
-        if(log_file == NULL) {
+        log_fd = open(log_name, O_CREAT | O_WRONLY | O_APPEND, S_IRWXU);
+        // log_file = fopen(log_name, "w");
+        if(log_fd == -1) {
             fprintf(stderr, "Opening the log file failed %s \n", strerror(errno));
             exit(1);
         }
@@ -152,7 +160,8 @@ int main(int argc, char *argv[]) {
     poll_fds[0].fd = 0;
     poll_fds[0].events = POLLIN;
 
-
+    char incomplete_buffer[100];
+    int pointer_in_buffer = 0;
     while(1) {
         int ret = poll(poll_fds, nfds, -1);
         if (ret <= 0) {
@@ -161,13 +170,26 @@ int main(int argc, char *argv[]) {
         }
         for (int input_fd = 0; input_fd < nfds; input_fd++) {
             if (poll_fds[input_fd].revents & POLLIN) {
-                char buffer[1000]; 
-                int how_much_read = read(poll_fds[input_fd].fd, buffer, 1000);
+                char read_buffer[1000]; 
+                int how_much_read = read(poll_fds[input_fd].fd, read_buffer, 1000);
                 if (input_fd == 0) {
-			    write(1, buffer, how_much_read);
-            }else  {
-                printf("The button is pressed \n");
-            }
+                    write(1, read_buffer, how_much_read);
+                    if(log_fd != -1) write(log_fd, read_buffer, how_much_read);
+                    int pointer_in_read = 0;
+                    while(pointer_in_read < how_much_read) {
+                        if(read_buffer[pointer_in_read] == '\n') {
+                            process_command(incomplete_buffer, pointer_in_buffer);
+                            pointer_in_buffer = 0;
+                            pointer_in_read ++;
+                        } else {
+                            incomplete_buffer[pointer_in_buffer] = read_buffer[pointer_in_read];
+                            pointer_in_buffer ++;
+                            pointer_in_read ++;
+                        }
+                    }
+                }else  {
+                    printf("The button is pressed \n");
+                }
             }
 
             if (poll_fds[input_fd].revents & POLLERR || poll_fds[input_fd].revents & POLLHUP) {
