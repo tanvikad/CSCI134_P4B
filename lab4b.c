@@ -34,6 +34,13 @@ int button_fd;
 int exit_flag = 0;
 
 
+void shutdown() {
+
+    rc_gpio_cleanup(1, 18);
+    rc_adc_cleanup();
+    exit(0);
+
+}
 float get_temperatureC() {
     int16_t adc_read= rc_adc_read_raw(0);
 
@@ -263,7 +270,7 @@ int main(int argc, char *argv[]) {
                             incomplete_buffer[pointer_in_buffer] = '\0';
                             process_command(incomplete_buffer, pointer_in_buffer);
                             if(exit_flag == 1) {
-                                exit(0);
+                                shutdown();
                             }
                             pointer_in_buffer = 0;
                             pointer_in_read ++;
@@ -285,7 +292,7 @@ int main(int argc, char *argv[]) {
                         write(log_fd, shutdown_buffer, strlen(shutdown_buffer));
                     }
                     exit_flag = 1;
-                    exit(0);
+                    shutdown();
                 }
             }
 
