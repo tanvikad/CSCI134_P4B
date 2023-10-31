@@ -12,3 +12,6 @@ clean:
 
 dist: 
 	tar -zcvf lab4b-40205638.tar.gz lab4b.c README smoke_test.sh Makefile
+
+check:
+	./smoke_test.sh
