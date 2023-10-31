@@ -34,7 +34,7 @@ int button_fd;
 int exit_flag = 0;
 
 
-void shutdown() {
+void shutdown_program() {
 
     rc_gpio_cleanup(1, 18);
     rc_adc_cleanup();
@@ -270,7 +270,7 @@ int main(int argc, char *argv[]) {
                             incomplete_buffer[pointer_in_buffer] = '\0';
                             process_command(incomplete_buffer, pointer_in_buffer);
                             if(exit_flag == 1) {
-                                shutdown();
+                                shutdown_program();
                             }
                             pointer_in_buffer = 0;
                             pointer_in_read ++;
@@ -292,7 +292,7 @@ int main(int argc, char *argv[]) {
                         write(log_fd, shutdown_buffer, strlen(shutdown_buffer));
                     }
                     exit_flag = 1;
-                    shutdown();
+                    shutdown_program();
                 }
             }
 
